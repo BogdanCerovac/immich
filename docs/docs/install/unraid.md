@@ -156,5 +156,5 @@ alt="Immich update notification"
    <img
    src={require('./img/unraid12.png').default}
    width="70%"
-   alt="Wait for Connection Closed and click Done"
+   alt="WebUI will now reflect version update under server section"
    />
