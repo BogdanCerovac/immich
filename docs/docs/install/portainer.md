@@ -25,7 +25,7 @@ alt="Dot Env Example"
 src={require('./img/env-1.png').default}
 width="50%"
 style={{border: '1px solid #ddd'}}
-alt="Dot Env Example"
+alt=""
 />
 
 9. Copy the content of the `example.env` file from the [GitHub repository](https://github.com/immich-app/immich/releases/latest/download/example.env) and paste into the editor.
@@ -35,7 +35,7 @@ alt="Dot Env Example"
 src={require('./img/env-2.png').default}
 width="50%"
 style={{border: '1px solid #ddd'}}
-alt="Dot Env Example"
+alt=""
 />
 
 - Populate custom database information if necessary.
