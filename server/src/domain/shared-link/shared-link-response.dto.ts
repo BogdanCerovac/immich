@@ -7,6 +7,8 @@ import { AssetResponseDto, mapAsset } from '../asset';
 export class SharedLinkResponseDto {
   id!: string;
   description!: string | null;
+  password!: string | null;
+  token?: string | null;
   userId!: string;
   key!: string;
 
@@ -31,6 +33,7 @@ export function mapSharedLink(sharedLink: SharedLinkEntity): SharedLinkResponseD
   return {
     id: sharedLink.id,
     description: sharedLink.description,
+    password: sharedLink.password,
     userId: sharedLink.userId,
     key: sharedLink.key.toString('base64url'),
     type: sharedLink.type,
@@ -53,12 +56,13 @@ export function mapSharedLinkWithoutMetadata(sharedLink: SharedLinkEntity): Shar
   return {
     id: sharedLink.id,
     description: sharedLink.description,
+    password: sharedLink.password,
     userId: sharedLink.userId,
     key: sharedLink.key.toString('base64url'),
     type: sharedLink.type,
     createdAt: sharedLink.createdAt,
     expiresAt: sharedLink.expiresAt,
-    assets: assets.map((asset) => mapAsset(asset, true)) as AssetResponseDto[],
+    assets: assets.map((asset) => mapAsset(asset, { stripMetadata: true })) as AssetResponseDto[],
     album: sharedLink.album ? mapAlbumWithoutAssets(sharedLink.album) : undefined,
     allowUpload: sharedLink.allowUpload,
     allowDownload: sharedLink.allowDownload,

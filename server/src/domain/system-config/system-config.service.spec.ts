@@ -1,8 +1,8 @@
 import {
   AudioCodec,
-  CQMode,
   CitiesFile,
   Colorspace,
+  CQMode,
   SystemConfig,
   SystemConfigEntity,
   SystemConfigKey,
@@ -15,7 +15,7 @@ import { BadRequestException } from '@nestjs/common';
 import { newCommunicationRepositoryMock, newJobRepositoryMock, newSystemConfigRepositoryMock } from '@test';
 import { JobName, QueueName } from '../job';
 import { ICommunicationRepository, IJobRepository, ISystemConfigRepository } from '../repositories';
-import { SystemConfigValidator, defaults } from './system-config.core';
+import { defaults, SystemConfigValidator } from './system-config.core';
 import { SystemConfigService } from './system-config.service';
 
 const updates: SystemConfigEntity[] = [
@@ -68,7 +68,7 @@ const updatedConfig = Object.freeze<SystemConfig>({
     },
     clip: {
       enabled: true,
-      modelName: 'ViT-B-32::openai',
+      modelName: 'ViT-B-32__openai',
     },
     facialRecognition: {
       enabled: true,
@@ -80,7 +80,8 @@ const updatedConfig = Object.freeze<SystemConfig>({
   },
   map: {
     enabled: true,
-    tileUrl: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+    lightStyle: '',
+    darkStyle: '',
   },
   reverseGeocoding: {
     enabled: true,
@@ -111,9 +112,21 @@ const updatedConfig = Object.freeze<SystemConfig>({
     quality: 80,
     colorspace: Colorspace.P3,
   },
+  newVersionCheck: {
+    enabled: true,
+  },
   trash: {
     enabled: true,
     days: 10,
+  },
+  theme: {
+    customCss: '',
+  },
+  library: {
+    scan: {
+      enabled: true,
+      cronExpression: '0 0 * * *',
+    },
   },
 });
 
@@ -173,7 +186,7 @@ describe(SystemConfigService.name, () => {
     it('should load the config from a file', async () => {
       process.env.IMMICH_CONFIG_FILE = 'immich-config.json';
       const partialConfig = { ffmpeg: { crf: 30 }, oauth: { autoLaunch: true }, trash: { days: 10 } };
-      configMock.readFile.mockResolvedValue(Buffer.from(JSON.stringify(partialConfig)));
+      configMock.readFile.mockResolvedValue(JSON.stringify(partialConfig));
 
       await expect(sut.getConfig()).resolves.toEqual(updatedConfig);
 
@@ -182,7 +195,7 @@ describe(SystemConfigService.name, () => {
 
     it('should accept an empty configuration file', async () => {
       process.env.IMMICH_CONFIG_FILE = 'immich-config.json';
-      configMock.readFile.mockResolvedValue(Buffer.from(JSON.stringify({})));
+      configMock.readFile.mockResolvedValue(JSON.stringify({}));
 
       await expect(sut.getConfig()).resolves.toEqual(defaults);
 
@@ -192,7 +205,7 @@ describe(SystemConfigService.name, () => {
     it('should allow underscores in the machine learning url', async () => {
       process.env.IMMICH_CONFIG_FILE = 'immich-config.json';
       const partialConfig = { machineLearning: { url: 'immich_machine_learning' } };
-      configMock.readFile.mockResolvedValue(Buffer.from(JSON.stringify(partialConfig)));
+      configMock.readFile.mockResolvedValue(JSON.stringify(partialConfig));
 
       const config = await sut.getConfig();
       expect(config.machineLearning.url).toEqual('immich_machine_learning');
@@ -210,7 +223,7 @@ describe(SystemConfigService.name, () => {
     for (const test of tests) {
       it(`should ${test.should}`, async () => {
         process.env.IMMICH_CONFIG_FILE = 'immich-config.json';
-        configMock.readFile.mockResolvedValue(Buffer.from(JSON.stringify(test.config)));
+        configMock.readFile.mockResolvedValue(JSON.stringify(test.config));
 
         await expect(sut.getConfig()).rejects.toBeInstanceOf(Error);
       });
@@ -242,6 +255,7 @@ describe(SystemConfigService.name, () => {
           '{{y}}/{{y}}-{{MM}}-{{dd}}/{{assetId}}',
           '{{y}}/{{y}}-{{MM}}/{{assetId}}',
           '{{y}}/{{y}}-{{WW}}/{{assetId}}',
+          '{{album}}/{{filename}}',
         ],
         secondOptions: ['s', 'ss'],
         weekOptions: ['W', 'WW'],
@@ -273,7 +287,7 @@ describe(SystemConfigService.name, () => {
 
     it('should throw an error if a config file is in use', async () => {
       process.env.IMMICH_CONFIG_FILE = 'immich-config.json';
-      configMock.readFile.mockResolvedValue(Buffer.from(JSON.stringify({})));
+      configMock.readFile.mockResolvedValue(JSON.stringify({}));
       await expect(sut.updateConfig(defaults)).rejects.toBeInstanceOf(BadRequestException);
       expect(configMock.saveAll).not.toHaveBeenCalled();
     });
@@ -289,6 +303,12 @@ describe(SystemConfigService.name, () => {
       expect(changeMock).toHaveBeenCalledWith(defaults);
 
       subscription.unsubscribe();
+    });
+  });
+
+  describe('getTheme', () => {
+    it('should return the default theme', async () => {
+      await expect(sut.getTheme()).resolves.toEqual(defaults.theme);
     });
   });
 });

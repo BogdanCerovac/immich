@@ -20,7 +20,7 @@ import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { DateTime } from 'luxon';
 import { And, FindOptionsRelations, FindOptionsWhere, In, IsNull, LessThan, Not, Repository } from 'typeorm';
-import { AssetEntity, AssetType, ExifEntity } from '../entities';
+import { AssetEntity, AssetJobStatusEntity, AssetType, ExifEntity } from '../entities';
 import OptionalBetween from '../utils/optional-between.util';
 import { paginate } from '../utils/pagination.util';
 
@@ -30,17 +30,24 @@ const truncateMap: Record<TimeBucketSize, string> = {
 };
 
 const dateTrunc = (options: TimeBucketOptions) =>
-  `(date_trunc('${truncateMap[options.size]}', ("localDateTime" at time zone 'UTC')) at time zone 'UTC')::timestamptz`;
+  `(date_trunc('${
+    truncateMap[options.size]
+  }', (asset."localDateTime" at time zone 'UTC')) at time zone 'UTC')::timestamptz`;
 
 @Injectable()
 export class AssetRepository implements IAssetRepository {
   constructor(
     @InjectRepository(AssetEntity) private repository: Repository<AssetEntity>,
     @InjectRepository(ExifEntity) private exifRepository: Repository<ExifEntity>,
+    @InjectRepository(AssetJobStatusEntity) private jobStatusRepository: Repository<AssetJobStatusEntity>,
   ) {}
 
   async upsertExif(exif: Partial<ExifEntity>): Promise<void> {
     await this.exifRepository.upsert(exif, { conflictPaths: ['assetId'] });
+  }
+
+  async upsertJobStatus(jobStatus: Partial<AssetJobStatusEntity>): Promise<void> {
+    await this.jobStatusRepository.upsert(jobStatus, { conflictPaths: ['assetId'] });
   }
 
   create(asset: AssetCreate): Promise<AssetEntity> {
@@ -102,17 +109,21 @@ export class AssetRepository implements IAssetRepository {
       .getMany();
   }
 
-  getByIds(ids: string[]): Promise<AssetEntity[]> {
-    return this.repository.find({
-      where: { id: In(ids) },
-      relations: {
+  getByIds(ids: string[], relations?: FindOptionsRelations<AssetEntity>): Promise<AssetEntity[]> {
+    if (!relations) {
+      relations = {
         exifInfo: true,
         smartInfo: true,
         tags: true,
         faces: {
           person: true,
         },
-      },
+        stack: true,
+      };
+    }
+    return this.repository.find({
+      where: { id: In(ids) },
+      relations,
       withDeleted: true,
     });
   }
@@ -192,6 +203,7 @@ export class AssetRepository implements IAssetRepository {
           person: true,
         },
         library: true,
+        stack: true,
       },
       // We are specifically asking for this asset. Return it even if it is soft deleted
       withDeleted: true,
@@ -316,6 +328,7 @@ export class AssetRepository implements IAssetRepository {
       case WithoutProperty.FACES:
         relations = {
           faces: true,
+          jobStatus: true,
         };
         where = {
           resizePath: Not(IsNull()),
@@ -323,6 +336,9 @@ export class AssetRepository implements IAssetRepository {
           faces: {
             assetId: IsNull(),
             personId: IsNull(),
+          },
+          jobStatus: {
+            facesRecognizedAt: IsNull(),
           },
         };
         break;
@@ -489,7 +505,7 @@ export class AssetRepository implements IAssetRepository {
       .getRawMany();
   }
 
-  getByTimeBucket(timeBucket: string, options: TimeBucketOptions): Promise<AssetEntity[]> {
+  getTimeBucket(timeBucket: string, options: TimeBucketOptions): Promise<AssetEntity[]> {
     const truncated = dateTrunc(options);
     return (
       this.getBuilder(options)
@@ -503,13 +519,14 @@ export class AssetRepository implements IAssetRepository {
   }
 
   private getBuilder(options: TimeBucketOptions) {
-    const { isArchived, isFavorite, isTrashed, albumId, personId, userId } = options;
+    const { isArchived, isFavorite, isTrashed, albumId, personId, userId, withStacked } = options;
 
     let builder = this.repository
       .createQueryBuilder('asset')
       .where('asset.isVisible = true')
       .andWhere('asset.fileCreatedAt < NOW()')
-      .leftJoinAndSelect('asset.exifInfo', 'exifInfo');
+      .leftJoinAndSelect('asset.exifInfo', 'exifInfo')
+      .leftJoinAndSelect('asset.stack', 'stack');
 
     if (albumId) {
       builder = builder.leftJoin('asset.albums', 'album').andWhere('album.id = :albumId', { albumId });
@@ -536,6 +553,10 @@ export class AssetRepository implements IAssetRepository {
         .innerJoin('asset.faces', 'faces')
         .innerJoin('faces.person', 'person')
         .andWhere('person.id = :personId', { personId });
+    }
+
+    if (withStacked) {
+      builder = builder.andWhere('asset.stackParentId IS NULL');
     }
 
     return builder;

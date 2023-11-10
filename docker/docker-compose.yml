@@ -1,10 +1,12 @@
 version: "3.8"
 
+name: immich
+
 services:
   immich-server:
     container_name: immich_server
     image: ghcr.io/immich-app/immich-server:${IMMICH_VERSION:-release}
-    command: ["start.sh", "immich"]
+    command: [ "start.sh", "immich" ]
     volumes:
       - ${UPLOAD_LOCATION}:/usr/src/app/upload
       - /etc/localtime:/etc/localtime:ro
@@ -22,7 +24,7 @@ services:
     # extends:
     #   file: hwaccel.yml
     #   service: hwaccel
-    command: ["start.sh", "microservices"]
+    command: [ "start.sh", "microservices" ]
     volumes:
       - ${UPLOAD_LOCATION}:/usr/src/app/upload
       - /etc/localtime:/etc/localtime:ro
@@ -83,10 +85,6 @@ services:
   immich-proxy:
     container_name: immich_proxy
     image: ghcr.io/immich-app/immich-proxy:${IMMICH_VERSION:-release}
-    environment:
-      # Make sure these values get passed through from the env file
-      - IMMICH_SERVER_URL
-      - IMMICH_WEB_URL
     ports:
       - 2283:8080
     depends_on:

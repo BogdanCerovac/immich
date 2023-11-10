@@ -31,7 +31,7 @@ export class AlbumService {
     @Inject(IJobRepository) private jobRepository: IJobRepository,
     @Inject(IUserRepository) private userRepository: IUserRepository,
   ) {
-    this.access = new AccessCore(accessRepository);
+    this.access = AccessCore.create(accessRepository);
   }
 
   async getCount(authUser: AuthUserDto): Promise<AlbumCountResponseDto> {
@@ -95,7 +95,7 @@ export class AlbumService {
 
   async create(authUser: AuthUserDto, dto: CreateAlbumDto): Promise<AlbumResponseDto> {
     for (const userId of dto.sharedWithUserIds || []) {
-      const exists = await this.userRepository.get(userId);
+      const exists = await this.userRepository.get(userId, {});
       if (!exists) {
         throw new BadRequestException('User not found');
       }
@@ -125,12 +125,12 @@ export class AlbumService {
         throw new BadRequestException('Invalid album thumbnail');
       }
     }
-
     const updatedAlbum = await this.albumRepository.update({
       id: album.id,
       albumName: dto.albumName,
       description: dto.description,
       albumThumbnailAssetId: dto.albumThumbnailAssetId,
+      isActivityEnabled: dto.isActivityEnabled,
     });
 
     await this.jobRepository.queue({ name: JobName.SEARCH_INDEX_ALBUM, data: { ids: [updatedAlbum.id] } });
@@ -152,9 +152,11 @@ export class AlbumService {
 
     await this.access.requirePermission(authUser, Permission.ALBUM_READ, id);
 
+    const existingAssetIds = await this.albumRepository.getAssetIds(id, dto.ids);
+
     const results: BulkIdResponseDto[] = [];
     for (const assetId of dto.ids) {
-      const hasAsset = await this.albumRepository.hasAsset({ albumId: id, assetId });
+      const hasAsset = existingAssetIds.has(assetId);
       if (hasAsset) {
         results.push({ id: assetId, success: false, error: BulkIdErrorReason.DUPLICATE });
         continue;
@@ -187,9 +189,11 @@ export class AlbumService {
 
     await this.access.requirePermission(authUser, Permission.ALBUM_READ, id);
 
+    const existingAssetIds = await this.albumRepository.getAssetIds(id, dto.ids);
+
     const results: BulkIdResponseDto[] = [];
     for (const assetId of dto.ids) {
-      const hasAsset = await this.albumRepository.hasAsset({ albumId: id, assetId });
+      const hasAsset = existingAssetIds.has(assetId);
       if (!hasAsset) {
         results.push({ id: assetId, success: false, error: BulkIdErrorReason.NOT_FOUND });
         continue;
@@ -234,7 +238,7 @@ export class AlbumService {
         throw new BadRequestException('User already added');
       }
 
-      const user = await this.userRepository.get(userId);
+      const user = await this.userRepository.get(userId, {});
       if (!user) {
         throw new BadRequestException('User not found');
       }

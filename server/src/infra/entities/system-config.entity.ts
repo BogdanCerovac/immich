@@ -62,10 +62,13 @@ export enum SystemConfigKey {
   MACHINE_LEARNING_FACIAL_RECOGNITION_MIN_FACES = 'machineLearning.facialRecognition.minFaces',
 
   MAP_ENABLED = 'map.enabled',
-  MAP_TILE_URL = 'map.tileUrl',
+  MAP_LIGHT_STYLE = 'map.lightStyle',
+  MAP_DARK_STYLE = 'map.darkStyle',
 
   REVERSE_GEOCODING_ENABLED = 'reverseGeocoding.enabled',
   REVERSE_GEOCODING_CITIES_FILE_OVERRIDE = 'reverseGeocoding.citiesFileOverride',
+
+  NEW_VERSION_CHECK_ENABLED = 'newVersionCheck.enabled',
 
   OAUTH_ENABLED = 'oauth.enabled',
   OAUTH_ISSUER_URL = 'oauth.issuerUrl',
@@ -90,6 +93,11 @@ export enum SystemConfigKey {
 
   TRASH_ENABLED = 'trash.enabled',
   TRASH_DAYS = 'trash.days',
+
+  THEME_CUSTOM_CSS = 'theme.customCss',
+
+  LIBRARY_SCAN_ENABLED = 'library.scan.enabled',
+  LIBRARY_SCAN_CRON_EXPRESSION = 'library.scan.cronExpression',
 }
 
 export enum TranscodePolicy {
@@ -115,6 +123,7 @@ export enum TranscodeHWAccel {
   NVENC = 'nvenc',
   QSV = 'qsv',
   VAAPI = 'vaapi',
+  RKMPP = 'rkmpp',
   DISABLED = 'disabled',
 }
 
@@ -186,7 +195,8 @@ export interface SystemConfig {
   };
   map: {
     enabled: boolean;
-    tileUrl: string;
+    lightStyle: string;
+    darkStyle: string;
   };
   reverseGeocoding: {
     enabled: boolean;
@@ -217,8 +227,20 @@ export interface SystemConfig {
     quality: number;
     colorspace: Colorspace;
   };
+  newVersionCheck: {
+    enabled: boolean;
+  };
   trash: {
     enabled: boolean;
     days: number;
+  };
+  theme: {
+    customCss: string;
+  };
+  library: {
+    scan: {
+      enabled: boolean;
+      cronExpression: string;
+    };
   };
 }

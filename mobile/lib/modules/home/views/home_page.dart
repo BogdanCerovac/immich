@@ -1,23 +1,23 @@
 import 'dart:async';
 
-import 'package:auto_route/auto_route.dart';
 import 'package:easy_localization/easy_localization.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_hooks/flutter_hooks.dart';
 import 'package:fluttertoast/fluttertoast.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
+import 'package:immich_mobile/extensions/build_context_extensions.dart';
 import 'package:immich_mobile/modules/album/providers/album.provider.dart';
 import 'package:immich_mobile/modules/album/providers/album_detail.provider.dart';
 import 'package:immich_mobile/modules/album/providers/shared_album.provider.dart';
 import 'package:immich_mobile/modules/album/services/album.service.dart';
+import 'package:immich_mobile/modules/asset_viewer/services/asset_stack.service.dart';
 import 'package:immich_mobile/modules/backup/providers/manual_upload.provider.dart';
+import 'package:immich_mobile/modules/home/models/selection_state.dart';
 import 'package:immich_mobile/modules/home/providers/multiselect.provider.dart';
 import 'package:immich_mobile/modules/home/ui/asset_grid/immich_asset_grid.dart';
 import 'package:immich_mobile/modules/home/ui/control_bottom_app_bar.dart';
-import 'package:immich_mobile/modules/home/ui/home_page_app_bar.dart';
 import 'package:immich_mobile/modules/memories/ui/memory_lane.dart';
-import 'package:immich_mobile/modules/home/ui/profile_drawer/profile_drawer.dart';
 import 'package:immich_mobile/routing/router.dart';
 import 'package:immich_mobile/shared/models/album.dart';
 import 'package:immich_mobile/shared/models/asset.dart';
@@ -25,6 +25,7 @@ import 'package:immich_mobile/shared/providers/asset.provider.dart';
 import 'package:immich_mobile/shared/providers/server_info.provider.dart';
 import 'package:immich_mobile/shared/providers/user.provider.dart';
 import 'package:immich_mobile/shared/providers/websocket.provider.dart';
+import 'package:immich_mobile/shared/ui/immich_app_bar.dart';
 import 'package:immich_mobile/shared/ui/immich_loading_indicator.dart';
 import 'package:immich_mobile/shared/ui/immich_toast.dart';
 import 'package:immich_mobile/utils/selection_handlers.dart';
@@ -36,7 +37,7 @@ class HomePage extends HookConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final multiselectEnabled = ref.watch(multiselectProvider.notifier);
     final selectionEnabledHook = useState(false);
-    final selectionAssetState = useState(AssetState.remote);
+    final selectionAssetState = useState(const SelectionAssetState());
 
     final selection = useState(<Asset>{});
     final albums = ref.watch(albumProvider).where((a) => a.isRemote).toList();
@@ -72,10 +73,6 @@ class HomePage extends HookConsumerWidget {
       [],
     );
 
-    void reloadAllAsset() {
-      ref.watch(assetProvider.notifier).getAllAsset();
-    }
-
     Widget buildBody() {
       void selectionListener(
         bool multiselect,
@@ -83,15 +80,8 @@ class HomePage extends HookConsumerWidget {
       ) {
         selectionEnabledHook.value = multiselect;
         selection.value = selectedAssets;
-        selectionAssetState.value = selectedAssets.any((e) => e.isRemote)
-            ? AssetState.remote
-            : AssetState.local;
-      }
-
-      void onShareAssets() {
-        handleShareAssets(ref, context, selection.value.toList());
-
-        selectionEnabledHook.value = false;
+        selectionAssetState.value =
+            SelectionAssetState.fromSelection(selectedAssets);
       }
 
       List<Asset> remoteOnlySelection({String? localErrorMessage}) {
@@ -108,6 +98,18 @@ class HomePage extends HookConsumerWidget {
           return assets.where((a) => a.isRemote).toList();
         }
         return assets.toList();
+      }
+
+      void onShareAssets(bool shareLocal) {
+        processing.value = true;
+        if (shareLocal) {
+          handleShareAssets(ref, context, selection.value.toList());
+        } else {
+          final ids = remoteOnlySelection().map((e) => e.remoteId!);
+          context.autoPush(SharedLinkEditRoute(assetsList: ids.toList()));
+        }
+        processing.value = false;
+        selectionEnabledHook.value = false;
       }
 
       void onFavoriteAssets() async {
@@ -166,9 +168,10 @@ class HomePage extends HookConsumerWidget {
         processing.value = true;
         selectionEnabledHook.value = false;
         try {
-          ref
-              .read(manualUploadProvider.notifier)
-              .uploadAssets(context, selection.value);
+          ref.read(manualUploadProvider.notifier).uploadAssets(
+                context,
+                selection.value.where((a) => a.storage == AssetState.local),
+              );
         } finally {
           processing.value = false;
         }
@@ -239,10 +242,28 @@ class HomePage extends HookConsumerWidget {
             ref.watch(sharedAlbumProvider.notifier).getAllSharedAlbums();
             selectionEnabledHook.value = false;
 
-            AutoRouter.of(context).push(AlbumViewerRoute(albumId: result.id));
+            context.autoPush(AlbumViewerRoute(albumId: result.id));
           }
         } finally {
           processing.value = false;
+        }
+      }
+
+      void onStack() async {
+        try {
+          processing.value = true;
+          if (!selectionEnabledHook.value || selection.value.length < 2) {
+            return;
+          }
+          final parent = selection.value.elementAt(0);
+          selection.value.remove(parent);
+          await ref.read(assetStackServiceProvider).updateStack(
+                parent,
+                childrenToAdd: selection.value.toList(),
+              );
+        } finally {
+          processing.value = false;
+          selectionEnabledHook.value = false;
         }
       }
 
@@ -278,7 +299,7 @@ class HomePage extends HookConsumerWidget {
                   style: TextStyle(
                     fontWeight: FontWeight.w600,
                     fontSize: 16,
-                    color: Theme.of(context).primaryColor,
+                    color: context.primaryColor,
                   ),
                 ).tr(),
               ),
@@ -322,6 +343,7 @@ class HomePage extends HookConsumerWidget {
                                   currentUser.memoryEnabled!)
                               ? const MemoryLane()
                               : const SizedBox(),
+                          showStack: true,
                         ),
                   error: (error, _) => Center(child: Text(error.toString())),
                   loading: buildLoadingIndicator,
@@ -339,6 +361,7 @@ class HomePage extends HookConsumerWidget {
                 onUpload: onUpload,
                 enabled: !processing.value,
                 selectionAssetState: selectionAssetState.value,
+                onStack: onStack,
               ),
             if (processing.value) const Center(child: ImmichLoadingIndicator()),
           ],
@@ -347,10 +370,7 @@ class HomePage extends HookConsumerWidget {
     }
 
     return Scaffold(
-      appBar: !selectionEnabledHook.value
-          ? HomePageAppBar(onPopBack: reloadAllAsset)
-          : null,
-      drawer: const ProfileDrawer(),
+      appBar: !selectionEnabledHook.value ? const ImmichAppBar() : null,
       body: buildBody(),
     );
   }

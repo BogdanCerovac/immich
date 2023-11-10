@@ -15,6 +15,7 @@ import {
 } from 'typeorm';
 import { AlbumEntity } from './album.entity';
 import { AssetFaceEntity } from './asset-face.entity';
+import { AssetJobStatusEntity } from './asset-job-status.entity';
 import { ExifEntity } from './exif.entity';
 import { LibraryEntity } from './library.entity';
 import { SharedLinkEntity } from './shared-link.entity';
@@ -148,6 +149,19 @@ export class AssetEntity {
 
   @OneToMany(() => AssetFaceEntity, (assetFace) => assetFace.asset)
   faces!: AssetFaceEntity[];
+
+  @Column({ nullable: true })
+  stackParentId?: string | null;
+
+  @ManyToOne(() => AssetEntity, (asset) => asset.stack, { nullable: true, onDelete: 'SET NULL', onUpdate: 'CASCADE' })
+  @JoinColumn({ name: 'stackParentId' })
+  stackParent?: AssetEntity | null;
+
+  @OneToMany(() => AssetEntity, (asset) => asset.stackParent)
+  stack?: AssetEntity[];
+
+  @OneToOne(() => AssetJobStatusEntity, (jobStatus) => jobStatus.asset, { nullable: true })
+  jobStatus?: AssetJobStatusEntity;
 }
 
 export enum AssetType {

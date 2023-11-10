@@ -1,20 +1,36 @@
-import { newStorageRepositoryMock, newSystemConfigRepositoryMock, newUserRepositoryMock } from '@test';
+import {
+  newCommunicationRepositoryMock,
+  newServerInfoRepositoryMock,
+  newStorageRepositoryMock,
+  newSystemConfigRepositoryMock,
+  newUserRepositoryMock,
+} from '@test';
 import { serverVersion } from '../domain.constant';
-import { IStorageRepository, ISystemConfigRepository, IUserRepository } from '../repositories';
+import {
+  ICommunicationRepository,
+  IServerInfoRepository,
+  IStorageRepository,
+  ISystemConfigRepository,
+  IUserRepository,
+} from '../repositories';
 import { ServerInfoService } from './server-info.service';
 
 describe(ServerInfoService.name, () => {
   let sut: ServerInfoService;
+  let communicationMock: jest.Mocked<ICommunicationRepository>;
   let configMock: jest.Mocked<ISystemConfigRepository>;
+  let serverInfoMock: jest.Mocked<IServerInfoRepository>;
   let storageMock: jest.Mocked<IStorageRepository>;
   let userMock: jest.Mocked<IUserRepository>;
 
   beforeEach(() => {
     configMock = newSystemConfigRepositoryMock();
+    communicationMock = newCommunicationRepositoryMock();
+    serverInfoMock = newServerInfoRepositoryMock();
     storageMock = newStorageRepositoryMock();
     userMock = newUserRepositoryMock();
 
-    sut = new ServerInfoService(configMock, userMock, storageMock);
+    sut = new ServerInfoService(communicationMock, configMock, userMock, serverInfoMock, storageMock);
   });
 
   it('should work', () => {
@@ -169,7 +185,6 @@ describe(ServerInfoService.name, () => {
         loginPageMessage: '',
         oauthButtonText: 'Login with OAuth',
         trashDays: 30,
-        mapTileUrl: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
       });
       expect(configMock.load).toHaveBeenCalled();
     });
@@ -204,7 +219,7 @@ describe(ServerInfoService.name, () => {
         },
       ]);
 
-      await expect(sut.getStats()).resolves.toEqual({
+      await expect(sut.getStatistics()).resolves.toEqual({
         photos: 120,
         videos: 31,
         usage: 1123455,
